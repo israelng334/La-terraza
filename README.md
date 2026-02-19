@@ -1,10 +1,10 @@
-# Restaurant Reservation System (Approach D)
+# Restaurant Reservation System (Approach D) Grupo 2 (Israel de la Cruz, Jose Robles, Enmanuel Nuñez)
 
 ## Descripción
 Sistema de reservas para restaurante con gestión de áreas, mesas y disponibilidad, evitando sobre-reservas y errores de asignación. Permite agregar mesas, consultar disponibilidad y gestionar reservas según reglas de negocio y límites por área.
 
 ## URL pública
-- [https://your-deployment-url.com](https://your-deployment-url.com) <!-- Reemplaza con tu URL real -->
+- [https://gleaming-douhua-8ab677.netlify.app/](https://github.com/israelng334/La-terraza/tree/main)(https://la-terraza.onrender.com/) <!-- Reemplaza con tu URL real -->
 
 
 ## Cómo correr local
