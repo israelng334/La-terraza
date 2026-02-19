@@ -1,14 +1,22 @@
 
+
 // --- IMPORTS AND APP INIT ---
 const express = require('express');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const fs = require('fs');
 const YAML = require('yaml');
+const mongoose = require('mongoose');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// --- MONGODB ATLAS CONNECTION ---
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://<username>:<password>@<cluster-url>/<dbname>?retryWrites=true&w=majority';
+mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('Connected to MongoDB Atlas'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
 // Load OpenAPI spec
 const openapi = YAML.parse(fs.readFileSync(__dirname + '/../openapi.yaml', 'utf8'));
@@ -17,12 +25,10 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapi));
 // Health endpoint
 app.get('/api/health', (req, res) => res.sendStatus(200));
 
-// In-memory storage
-let db = {
-  areas: [],
-  tables: [],
-  reservations: []
-};
+
+
+// Import Mongoose models
+const { Area, Table, Reservation } = require('./models');
 
 // /seed endpoint
 app.post('/api/seed', (req, res) => {
@@ -41,50 +47,61 @@ app.post('/api/seed', (req, res) => {
 
 // --- ENDPOINTS ---
 
-// GET /areas - list all areas
-app.get('/api/areas', (req, res) => {
-  res.json(db.areas.map(area => ({
-    id: area.id,
-    name: area.name,
-    maxTables: area.maxTables
-  })));
+
+// GET /areas - list all areas (MongoDB)
+app.get('/api/areas', async (req, res) => {
+  try {
+    const areas = await Area.find({}, { _id: 0, __v: 0 });
+    res.json(areas);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch areas', details: err.message });
+  }
 });
 
-// POST /areas/{areaId}/tables - add a table to an area
-app.post('/api/areas/:areaId/tables', (req, res) => {
+
+// POST /areas/{areaId}/tables - add a table to an area (MongoDB)
+app.post('/api/areas/:areaId/tables', async (req, res) => {
   const { areaId } = req.params;
   const { type, capacity } = req.body;
-  const area = db.areas.find(a => a.id === areaId);
-  if (!area) return res.status(404).json({ error: 'Area not found' });
-  const tablesInArea = db.tables.filter(t => t.areaId === areaId);
-  if (tablesInArea.length >= area.maxTables) {
-    return res.status(409).json({ error: 'Area table limit reached' });
+  try {
+    const area = await Area.findOne({ id: areaId });
+    if (!area) return res.status(404).json({ error: 'Area not found' });
+    const tablesInArea = await Table.find({ areaId });
+    if (tablesInArea.length >= area.maxTables) {
+      return res.status(409).json({ error: 'Area table limit reached' });
+    }
+    if (!type || !capacity || typeof capacity !== 'number') {
+      return res.status(400).json({ error: 'Invalid input' });
+    }
+    // VIP special: only allow 3 tables max
+    if (areaId === 'vip' && tablesInArea.length >= 3) {
+      return res.status(409).json({ error: 'VIP area table limit reached' });
+    }
+    const newTable = new Table({
+      id: `${areaId}_${Date.now()}`,
+      type,
+      capacity,
+      areaId
+    });
+    await newTable.save();
+    res.status(201).json(newTable);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add table', details: err.message });
   }
-  if (!type || !capacity || typeof capacity !== 'number') {
-    return res.status(400).json({ error: 'Invalid input' });
-  }
-  // VIP special: only allow 3 tables max
-  if (areaId === 'vip' && tablesInArea.length >= 3) {
-    return res.status(409).json({ error: 'VIP area table limit reached' });
-  }
-  const newTable = {
-    id: `${areaId}_${Date.now()}`,
-    type,
-    capacity,
-    areaId
-  };
-  db.tables.push(newTable);
-  res.status(201).json(newTable);
 });
 
-// GET /tables - list tables, optionally by areaId
-app.get('/api/tables', (req, res) => {
+
+// GET /tables - list tables, optionally by areaId (MongoDB)
+app.get('/api/tables', async (req, res) => {
   const { areaId } = req.query;
-  let tables = db.tables;
-  if (areaId) {
-    tables = tables.filter(t => t.areaId === areaId);
+  try {
+    let query = {};
+    if (areaId) query.areaId = areaId;
+    const tables = await Table.find(query, { _id: 0, __v: 0 });
+    res.json(tables);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch tables', details: err.message });
   }
-  res.json(tables);
 });
 
 // Helper: round up to next table capacity
@@ -112,8 +129,9 @@ function addMinutes(time, mins) {
   return date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
 }
 
-// POST /reservations - create reservation (pending, no table assigned)
-app.post('/api/reservations', (req, res) => {
+
+// POST /reservations - create reservation (pending, no table assigned) (MongoDB)
+app.post('/api/reservations', async (req, res) => {
   const { name, date, startTime, partySize, areaPreference, duration, notes } = req.body;
   if (!name || !date || !startTime || !partySize) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -124,122 +142,178 @@ app.post('/api/reservations', (req, res) => {
   if (resDate < now) {
     return res.status(422).json({ error: 'Cannot reserve in the past' });
   }
-  // Find area
-  let area = db.areas.find(a => a.id === (areaPreference || 'any').toLowerCase());
-  if (!area && areaPreference && areaPreference !== 'ANY') {
-    return res.status(422).json({ error: 'Area not found' });
-  }
-  // If ANY, pick area with available table
-  let candidateAreas = area ? [area] : db.areas;
-  let assignedArea = null;
-  let assignedCapacity = null;
-  for (const a of candidateAreas) {
-    const tables = db.tables.filter(t => t.areaId === a.id);
-    const cap = getTableCapacity(partySize, tables);
-    if (cap) {
-      assignedArea = a;
-      assignedCapacity = cap;
-      break;
+  try {
+    // Find area(s)
+    let area = await Area.findOne({ id: (areaPreference || 'any').toLowerCase() });
+    if (!area && areaPreference && areaPreference !== 'ANY') {
+      return res.status(422).json({ error: 'Area not found' });
     }
+    let candidateAreas = area ? [area] : await Area.find();
+    let assignedArea = null;
+    let assignedCapacity = null;
+    for (const a of candidateAreas) {
+      const tables = await Table.find({ areaId: a.id });
+      const cap = getTableCapacity(partySize, tables);
+      if (cap) {
+        assignedArea = a;
+        assignedCapacity = cap;
+        break;
+      }
+    }
+    if (!assignedArea) {
+      return res.status(422).json({ error: 'No suitable table available' });
+    }
+    // Create reservation (pending, no table assigned yet)
+    const newRes = new Reservation({
+      id: 'r' + Date.now(),
+      name,
+      date,
+      startTime,
+      duration: duration || 90,
+      partySize,
+      areaId: assignedArea.id,
+      tableId: null,
+      status: 'pending',
+      notes: notes || ''
+    });
+    await newRes.save();
+    res.status(201).json(newRes);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create reservation', details: err.message });
   }
-  if (!assignedArea) {
-    return res.status(422).json({ error: 'No suitable table available' });
-  }
-  // Create reservation (pending, no table assigned yet)
-  const newRes = {
-    id: 'r' + Date.now(),
-    name,
-    date,
-    startTime,
-    duration: duration || 90,
-    partySize,
-    areaId: assignedArea.id,
-    tableId: null,
-    status: 'pending',
-    notes: notes || ''
-  };
-  db.reservations.push(newRes);
-  res.status(201).json(newRes);
 });
 
-// GET /reservations?date=YYYY-MM-DD&areaId=?
-app.get('/api/reservations', (req, res) => {
+
+// GET /reservations?date=YYYY-MM-DD&areaId=? (MongoDB)
+app.get('/api/reservations', async (req, res) => {
   const { date, areaId } = req.query;
-  let results = db.reservations;
-  if (date) results = results.filter(r => r.date === date);
-  if (areaId) results = results.filter(r => r.areaId === areaId);
-  res.json(results);
+  try {
+    let query = {};
+    if (date) query.date = date;
+    if (areaId) query.areaId = areaId;
+    const results = await Reservation.find(query, { _id: 0, __v: 0 });
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch reservations', details: err.message });
+  }
 });
 
-// PATCH /reservations/{id}/status
-app.patch('/api/reservations/:id/status', (req, res) => {
+
+// PATCH /reservations/{id}/status (MongoDB)
+app.patch('/api/reservations/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   const valid = ['pending', 'confirmed', 'cancelled'];
   if (!valid.includes(status)) {
     return res.status(400).json({ error: 'Invalid status' });
   }
-  const resv = db.reservations.find(r => r.id === id);
-  if (!resv) return res.status(404).json({ error: 'Reservation not found' });
-  if (resv.status === 'cancelled') {
-    return res.status(400).json({ error: 'Cannot confirm a cancelled reservation' });
-  }
-  // On confirm, assign table if possible
-  if (status === 'confirmed') {
-    // Find available table
-    const tables = db.tables.filter(t => t.areaId === resv.areaId && t.capacity >= resv.partySize);
-    let assigned = null;
-    for (const t of tables) {
-      const overlaps = db.reservations.some(r =>
-        r.tableId === t.id && r.date === resv.date && r.status === 'confirmed' && isOverlapping(r, resv)
-      );
-      if (!overlaps) {
-        assigned = t;
-        break;
+  try {
+    const resv = await Reservation.findOne({ id });
+    if (!resv) return res.status(404).json({ error: 'Reservation not found' });
+    if (resv.status === 'cancelled') {
+      return res.status(400).json({ error: 'Cannot confirm a cancelled reservation' });
+    }
+    // On confirm, assign table if possible
+    if (status === 'confirmed') {
+      const tables = await Table.find({ areaId: resv.areaId, capacity: { $gte: resv.partySize } });
+      let assigned = null;
+      for (const t of tables) {
+        const overlaps = await Reservation.findOne({
+          tableId: t.id,
+          date: resv.date,
+          status: 'confirmed',
+          $expr: { $function: {
+            body: function(rStart, rDuration, sStart, sDuration) {
+              function addMinutes(time, mins) {
+                const [h, m] = time.split(':').map(Number);
+                const date = new Date(2000, 0, 1, h, m);
+                date.setMinutes(date.getMinutes() + mins);
+                return date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+              }
+              const start1 = rStart;
+              const end1 = addMinutes(rStart, rDuration || 90);
+              const start2 = sStart;
+              const end2 = addMinutes(sStart, sDuration || 90);
+              return (start1 < end2 && start2 < end1);
+            },
+            args: ["$startTime", "$duration", resv.startTime, resv.duration || 90],
+            lang: "js"
+          }}
+        });
+        if (!overlaps) {
+          assigned = t;
+          break;
+        }
       }
+      if (!assigned) {
+        return res.status(409).json({ error: 'No available table for this reservation' });
+      }
+      resv.tableId = assigned.id;
     }
-    if (!assigned) {
-      return res.status(409).json({ error: 'No available table for this reservation' });
-    }
-    resv.tableId = assigned.id;
+    resv.status = status;
+    await resv.save();
+    res.json(resv);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update reservation status', details: err.message });
   }
-  resv.status = status;
-  res.json(resv);
 });
 
-// GET /availability?date=YYYY-MM-DD&partySize=7&startTime=20:00&areaPreference=VIP|TERRACE|ANY
-app.get('/api/availability', (req, res) => {
+
+// GET /availability?date=YYYY-MM-DD&partySize=7&startTime=20:00&areaPreference=VIP|TERRACE|ANY (MongoDB)
+app.get('/api/availability', async (req, res) => {
   const { date, partySize, startTime, areaPreference } = req.query;
   if (!date || !partySize || !startTime) {
     return res.status(400).json({ error: 'Missing required parameters' });
   }
   const size = parseInt(partySize, 10);
-  let areas = db.areas;
-  if (areaPreference && areaPreference !== 'ANY') {
-    areas = areas.filter(a => a.id.toLowerCase() === areaPreference.toLowerCase());
-    if (areas.length === 0) {
-      return res.status(422).json({ error: 'Area not found' });
-    }
-  }
-  let found = null;
-  for (const area of areas) {
-    const tables = db.tables.filter(t => t.areaId === area.id && t.capacity >= size);
-    for (const t of tables) {
-      const overlaps = db.reservations.some(r =>
-        r.tableId === t.id && r.date === date && r.status === 'confirmed' &&
-        isOverlapping(r, { startTime, duration: 90 })
-      );
-      if (!overlaps) {
-        found = { area: area.name, table: t };
-        break;
+  try {
+    let areas = await Area.find();
+    if (areaPreference && areaPreference !== 'ANY') {
+      areas = areas.filter(a => a.id.toLowerCase() === areaPreference.toLowerCase());
+      if (areas.length === 0) {
+        return res.status(422).json({ error: 'Area not found' });
       }
     }
-    if (found) break;
+    let found = null;
+    for (const area of areas) {
+      const tables = await Table.find({ areaId: area.id, capacity: { $gte: size } });
+      for (const t of tables) {
+        const overlaps = await Reservation.findOne({
+          tableId: t.id,
+          date,
+          status: 'confirmed',
+          $expr: { $function: {
+            body: function(rStart, rDuration, sStart, sDuration) {
+              function addMinutes(time, mins) {
+                const [h, m] = time.split(':').map(Number);
+                const date = new Date(2000, 0, 1, h, m);
+                date.setMinutes(date.getMinutes() + mins);
+                return date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+              }
+              const start1 = rStart;
+              const end1 = addMinutes(rStart, rDuration || 90);
+              const start2 = sStart;
+              const end2 = addMinutes(sStart, sDuration || 90);
+              return (start1 < end2 && start2 < end1);
+            },
+            args: ["$startTime", "$duration", startTime, 90],
+            lang: "js"
+          }}
+        });
+        if (!overlaps) {
+          found = { area: area.name, table: t };
+          break;
+        }
+      }
+      if (found) break;
+    }
+    if (!found) {
+      return res.status(422).json({ error: 'No suitable table available' });
+    }
+    res.json(found);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to check availability', details: err.message });
   }
-  if (!found) {
-    return res.status(422).json({ error: 'No suitable table available' });
-  }
-  res.json(found);
 });
 
 const PORT = process.env.PORT || 3001;
