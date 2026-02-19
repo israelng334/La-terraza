@@ -12,7 +12,7 @@ Frontend para consumir la API de reservas del bootcamp.
 Crear un archivo `.env` en la raíz:
 
 ```bash
-VITE_API_BASE_URL=http://localhost:3000
+VITE_API_BASE_URL=http://localhost:3001
 ```
 
 Si el backend está desplegado, colocar la URL pública.

@@ -13,8 +13,8 @@ app.use(cors());
 app.use(express.json());
 
 // --- MONGODB ATLAS CONNECTION ---
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://<username>:<password>@<cluster-url>/<dbname>?retryWrites=true&w=majority';
-mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://renderuser123:renderuser123@cluster0.i7gz58x.mongodb.net/?appName=Cluster0';
+mongoose.connect(MONGODB_URI)
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('MongoDB connection error:', err));
 
@@ -31,15 +31,34 @@ app.get('/api/health', (req, res) => res.sendStatus(200));
 const { Area, Table, Reservation } = require('./models');
 
 // /seed endpoint
-app.post('/api/seed', (req, res) => {
+app.post('/api/seed', async (req, res) => {
   try {
     const seed = JSON.parse(fs.readFileSync(__dirname + '/../data/seed.json', 'utf8'));
-    db.areas = seed.areas.map(area => ({ ...area, tables: undefined }));
-    db.tables = seed.areas.flatMap(area =>
-      area.tables.map(table => ({ ...table, areaId: area.id }))
+    // Clear existing data
+    await Area.deleteMany({});
+    await Table.deleteMany({});
+    await Reservation.deleteMany({});
+
+    // Insert areas
+    const areaDocs = seed.areas.map(area => ({
+      id: area.id,
+      name: area.name,
+      maxTables: area.maxTables
+    }));
+    await Area.insertMany(areaDocs);
+
+    // Insert tables
+    const tableDocs = seed.areas.flatMap(area =>
+      area.tables.map(table => ({
+        id: table.id,
+        type: table.type,
+        capacity: table.capacity,
+        areaId: area.id
+      }))
     );
-    db.reservations = [];
-    res.status(200).json({ message: 'Seeded' });
+    await Table.insertMany(tableDocs);
+
+    res.status(200).json({ message: 'Seeded to MongoDB' });
   } catch (e) {
     res.status(500).json({ error: 'Seed failed', details: e.message });
   }
@@ -316,7 +335,7 @@ app.get('/api/availability', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`API running on port ${PORT}`);
 });

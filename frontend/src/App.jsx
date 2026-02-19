@@ -76,7 +76,7 @@ function App() {
 
   async function checkHealth() {
     try {
-      await apiRequest('/health')
+      await apiRequest('/api/health')
       setHealth('up')
     } catch {
       setHealth('down')
@@ -85,7 +85,7 @@ function App() {
 
   async function fetchAreas() {
     try {
-      const data = await apiRequest('/areas')
+      const data = await apiRequest('/api/areas')
       const areaList = Array.isArray(data) ? data : data?.data ?? []
       setAreas(areaList)
     } catch {
@@ -124,7 +124,7 @@ function App() {
         areaPreference: availabilityForm.areaPreference,
       })
 
-      const data = await apiRequest(`/availability?${params.toString()}`)
+      const data = await apiRequest(`/api/availability?${params.toString()}`)
       setAvailabilityResult(data)
       setFeedback({ type: 'success', text: 'Disponibilidad consultada.' })
     } catch (error) {
@@ -159,7 +159,7 @@ function App() {
     }
 
     try {
-      const data = await apiRequest('/reservations', {
+      const data = await apiRequest('/api/reservations', {
         method: 'POST',
         body: JSON.stringify(payload),
       })
@@ -190,7 +190,7 @@ function App() {
 
     try {
       const params = new URLSearchParams({ date: reservationDateFilter })
-      const data = await apiRequest(`/reservations?${params.toString()}`)
+      const data = await apiRequest(`/api/reservations?${params.toString()}`)
       const reservationList = Array.isArray(data) ? data : data?.data ?? []
       setReservations(reservationList)
       setFeedback({ type: 'success', text: `Reservas cargadas: ${reservationList.length}.` })
@@ -213,7 +213,7 @@ function App() {
     setFeedback({ type: 'info', text: '' })
 
     try {
-      await apiRequest(`/reservations/${statusPayload.id}/status`, {
+      await apiRequest(`/api/reservations/${statusPayload.id}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status: statusPayload.status }),
       })
@@ -303,7 +303,7 @@ function App() {
               </select>
             </label>
             <button type="submit" disabled={!canFetchAvailability || loading.availability}>
-              {loading.availability ? 'Consultando...' : 'GET /availability'}
+              {loading.availability ? 'Consultando...' : 'GET /api/availability'}
             </button>
           </form>
           <pre>{availabilityResult ? JSON.stringify(availabilityResult, null, 2) : 'Sin resultados aún'}</pre>
@@ -407,7 +407,7 @@ function App() {
               />
             </label>
             <button type="submit" disabled={loading.reservation}>
-              {loading.reservation ? 'Creando...' : 'POST /reservations'}
+              {loading.reservation ? 'Creando...' : 'POST /api/reservations'}
             </button>
           </form>
         </article>
@@ -425,7 +425,7 @@ function App() {
               />
             </label>
             <button type="submit" disabled={loading.list}>
-              {loading.list ? 'Cargando...' : 'GET /reservations'}
+              {loading.list ? 'Cargando...' : 'GET /api/reservations'}
             </button>
           </form>
 
@@ -453,7 +453,7 @@ function App() {
               </select>
             </label>
             <button type="submit" disabled={loading.status}>
-              {loading.status ? 'Actualizando...' : 'PATCH /reservations/:id/status'}
+              {loading.status ? 'Actualizando...' : 'PATCH /api/reservations/:id/status'}
             </button>
           </form>
 
