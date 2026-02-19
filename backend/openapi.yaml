@@ -1,0 +1,192 @@
+openapi: 3.0.3
+info:
+  title: Restaurant Reservation API
+  version: 1.0.0
+  description: API for managing restaurant reservations, areas, tables, and availability (Approach D)
+servers:
+  - url: https://your-deployed-url.com/api
+    description: Production server
+  - url: http://localhost:3000/api
+    description: Local server
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /seed:
+    post:
+      summary: Seed initial data
+      responses:
+        '200':
+          description: Seeded
+  /areas:
+    get:
+      summary: List all areas
+      responses:
+        '200':
+          description: List of areas
+  /areas/{areaId}/tables:
+    post:
+      summary: Add a table to an area
+      parameters:
+        - in: path
+          name: areaId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableInput'
+      responses:
+        '201':
+          description: Table added
+        '409':
+          description: Area table limit reached
+        '400':
+          description: Invalid input
+  /tables:
+    get:
+      summary: List tables (optionally by area)
+      parameters:
+        - in: query
+          name: areaId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of tables
+  /reservations:
+    post:
+      summary: Create a reservation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationInput'
+      responses:
+        '201':
+          description: Reservation created
+        '409':
+          description: Overlapping reservation or no suitable table
+        '400':
+          description: Invalid input
+        '422':
+          description: Business rule violation
+    get:
+      summary: List reservations by date and area
+      parameters:
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: areaId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of reservations
+  /reservations/{id}/status:
+    patch:
+      summary: Update reservation status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pending, confirmed, cancelled]
+      responses:
+        '200':
+          description: Status updated
+        '400':
+          description: Invalid status
+        '404':
+          description: Reservation not found
+  /availability:
+    get:
+      summary: Check availability for a reservation
+      parameters:
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: partySize
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: startTime
+          required: true
+          schema:
+            type: string
+            pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+        - in: query
+          name: areaPreference
+          schema:
+            type: string
+            enum: [VIP, TERRACE, PATIO, LOBBY, BAR, ANY]
+      responses:
+        '200':
+          description: Availability result
+        '422':
+          description: No suitable table available
+components:
+  schemas:
+    TableInput:
+      type: object
+      required:
+        - type
+        - capacity
+      properties:
+        type:
+          type: string
+          enum: [standard, circular, square]
+        capacity:
+          type: integer
+    ReservationInput:
+      type: object
+      required:
+        - name
+        - date
+        - startTime
+        - partySize
+      properties:
+        name:
+          type: string
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+        partySize:
+          type: integer
+        areaPreference:
+          type: string
+          enum: [VIP, TERRACE, PATIO, LOBBY, BAR, ANY]
+        duration:
+          type: integer
+          enum: [90, 120, 180]
+        notes:
+          type: string

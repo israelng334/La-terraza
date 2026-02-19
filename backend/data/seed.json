@@ -1,0 +1,68 @@
+{
+  "areas": [
+    {
+      "id": "terraza",
+      "name": "Terraza",
+      "maxTables": 8,
+      "tables": [
+        { "id": "t1", "type": "standard", "capacity": 2 },
+        { "id": "t2", "type": "standard", "capacity": 2 },
+        { "id": "t3", "type": "standard", "capacity": 4 },
+        { "id": "t4", "type": "standard", "capacity": 4 },
+        { "id": "t5", "type": "standard", "capacity": 6 },
+        { "id": "t6", "type": "standard", "capacity": 6 },
+        { "id": "t7", "type": "standard", "capacity": 8 },
+        { "id": "t8", "type": "standard", "capacity": 8 }
+      ]
+    },
+    {
+      "id": "patio",
+      "name": "Patio",
+      "maxTables": 7,
+      "tables": [
+        { "id": "p1", "type": "standard", "capacity": 2 },
+        { "id": "p2", "type": "standard", "capacity": 2 },
+        { "id": "p3", "type": "standard", "capacity": 4 },
+        { "id": "p4", "type": "standard", "capacity": 4 },
+        { "id": "p5", "type": "standard", "capacity": 6 },
+        { "id": "p6", "type": "standard", "capacity": 6 },
+        { "id": "p7", "type": "standard", "capacity": 8 }
+      ]
+    },
+    {
+      "id": "lobby",
+      "name": "Lobby",
+      "maxTables": 6,
+      "tables": [
+        { "id": "l1", "type": "standard", "capacity": 2 },
+        { "id": "l2", "type": "standard", "capacity": 2 },
+        { "id": "l3", "type": "standard", "capacity": 4 },
+        { "id": "l4", "type": "standard", "capacity": 4 },
+        { "id": "l5", "type": "standard", "capacity": 6 },
+        { "id": "l6", "type": "standard", "capacity": 6 }
+      ]
+    },
+    {
+      "id": "bar",
+      "name": "Bar",
+      "maxTables": 5,
+      "tables": [
+        { "id": "b1", "type": "standard", "capacity": 2 },
+        { "id": "b2", "type": "standard", "capacity": 2 },
+        { "id": "b3", "type": "standard", "capacity": 4 },
+        { "id": "b4", "type": "standard", "capacity": 4 },
+        { "id": "b5", "type": "standard", "capacity": 4 }
+      ]
+    },
+    {
+      "id": "vip",
+      "name": "Salones VIP",
+      "maxTables": 3,
+      "tables": [
+        { "id": "v1", "type": "circular", "capacity": 10 },
+        { "id": "v2", "type": "square", "capacity": 3 },
+        { "id": "v3", "type": "square", "capacity": 3 }
+      ]
+    }
+  ]
+}

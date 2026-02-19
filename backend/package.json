@@ -1,0 +1,16 @@
+{
+  "name": "restaurant-reservation-backend",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "swagger-ui-express": "^4.6.3",
+    "yaml": "^2.3.4"
+  }
+}
